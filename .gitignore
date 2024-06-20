@@ -1,0 +1,26 @@
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Executables
+*.exe
+*.out
+
+# Cache directories
+.cache/
+.idea/
+
+# OS-specific files
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Configuration files
+*.yaml
+*.yml
+
+# Ignore the vendor directory if using modules
+/vendor/
