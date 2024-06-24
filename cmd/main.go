@@ -821,9 +821,16 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	cache "github.com/ragavcr7/caching-library/api"
 	"github.com/ragavcr7/caching-library/cache"
 )
+
+// Example user structure for demonstration
+type User struct {
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"createdAt"`
+}
 
 func main() {
 	// Initialize caches
@@ -834,24 +841,23 @@ func main() {
 	memcachedCache := cache.NewMemcachedCache(memcachedAddr)
 	redisCache := cache.NewRedisCache(redisAddr, redisDB)
 
-	// Capacity and expiration for InMemoryCache
+	// Capacity for InMemoryCache
 	capacity := 100
-	expiration := 24 * time.Hour
-	inMemoryCache := cache.NewInMemoryCache(capacity, expiration)
+	inMemoryCache := cache.NewInMemoryCache(capacity)
+
+	// Initialize LRU cache
+	lruCapacity := 1000 // Adjust capacity as needed
+	lruCache := cache.NewLRUCache(lruCapacity)
 
 	// Create the Gin router
 	router := gin.Default()
 
 	// Initialize API handlers
-	cacheHandler := api.NewCacheHandler(inMemoryCache, memcachedCache, redisCache)
-	userHandler := api.NewUserHandler()
+	cacheHandler := NewCacheHandler(memcachedCache, redisCache, inMemoryCache, lruCache)
+	userHandler := NewUserHandler()
 
 	// Routes for caching endpoints
-	router.POST("/cache", cacheHandler.Set)
-	router.GET("/cache/:key", cacheHandler.Get)
-	router.DELETE("/cache/:key", cacheHandler.Delete)
-	router.GET("/cache", cacheHandler.GetAll)
-	router.DELETE("/cache", cacheHandler.DeleteAll)
+	cacheHandler.SetupRoutes(router)
 
 	// Routes for user endpoints
 	router.POST("/user", userHandler.CreateUser)
@@ -868,104 +874,14 @@ func main() {
 	}
 }
 
-// Example user structure for demonstration
-type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-// Example handler for caching operations
-func handleCacheSet(c *gin.Context) {
-	var data map[string]interface{}
-	if err := c.BindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	key, ok := data["key"].(string)
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid key"})
-		return
-	}
-
-	value := data["value"]
-	expiration := data["expiration"]
-
-	// Example: store in Redis
-	jsonValue, err := json.Marshal(value)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal value"})
-		return
-	}
-
-	err = redisCache.Set(key, string(jsonValue), time.Duration(expiration.(int))*time.Second)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to set key in Redis: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "value set in cache"})
-}
-
-func handleCacheGet(c *gin.Context) {
-	key := c.Param("key")
-
-	// Example: retrieve from Redis
-	cachedValue, err := redisCache.Get(key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get key from Redis: %v", err)})
-		return
-	}
-
-	var value interface{}
-	err = json.Unmarshal([]byte(cachedValue), &value)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to unmarshal value: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"key": key, "value": value})
-}
-
-func handleCacheDelete(c *gin.Context) {
-	key := c.Param("key")
-
-	// Example: delete from Redis
-	err := redisCache.Delete(key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete key from Redis: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "key deleted from cache"})
-}
-
-func handleCacheGetAll(c *gin.Context) {
-	// Example: retrieve all keys from Redis
-	keys, err := redisCache.GetAll()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to get all keys from Redis: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"keys": keys})
-}
-
-func handleCacheDeleteAll(c *gin.Context) {
-	// Example: delete all keys from Redis
-	err := redisCache.DeleteAll()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete all keys from Redis: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "all keys deleted from cache"})
-}
-
 // Example handler for user operations
-func handleUserCreate(c *gin.Context) {
+type UserHandler struct{}
+
+func NewUserHandler() *UserHandler {
+	return &UserHandler{}
+}
+
+func (uh *UserHandler) CreateUser(c *gin.Context) {
 	var user User
 	if err := c.BindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -977,7 +893,7 @@ func handleUserCreate(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"user": user})
 }
 
-func handleUserGet(c *gin.Context) {
+func (uh *UserHandler) GetUser(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -988,15 +904,15 @@ func handleUserGet(c *gin.Context) {
 	// Example: retrieve user data from database or cache
 	user := User{
 		ID:        id,
-		Username:  "example_user",
-		Email:     "example@example.com",
+		Username:  "ragav",
+		Email:     "ragav@yahoo.com",
 		CreatedAt: time.Now(),
 	}
 
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
-func handleUserUpdate(c *gin.Context) {
+func (uh *UserHandler) UpdateUser(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -1016,7 +932,7 @@ func handleUserUpdate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"updatedUser": updatedUser})
 }
 
-func handleUserDelete(c *gin.Context) {
+func (uh *UserHandler) DeleteUser(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
@@ -1026,4 +942,152 @@ func handleUserDelete(c *gin.Context) {
 
 	// Example: delete user data from database or cache
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("user with ID %d deleted", id)})
+}
+
+// Example handler for caching operations
+type CacheHandler struct {
+	memcachedCache *cache.MemcachedCache
+	redisCache     *cache.RedisCache
+	inMemoryCache  *cache.InMemoryCache
+	lruCache       *cache.LRUCache
+}
+
+func NewCacheHandler(memcachedCache *cache.MemcachedCache, redisCache *cache.RedisCache, inMemoryCache *cache.InMemoryCache, lruCache *cache.LRUCache) *CacheHandler {
+	return &CacheHandler{
+		memcachedCache: memcachedCache,
+		redisCache:     redisCache,
+		inMemoryCache:  inMemoryCache,
+		lruCache:       lruCache,
+	}
+}
+
+func (ch *CacheHandler) SetupRoutes(router *gin.Engine) {
+	router.POST("/cache/:key", ch.SetCache)
+	router.GET("/cache/:key", ch.GetCache)
+	router.DELETE("/cache/:key", ch.DeleteCache)
+	router.GET("/cache", ch.GetAllCache)
+	router.DELETE("/cache", ch.DeleteAllCache)
+}
+
+func (ch *CacheHandler) SetCache(c *gin.Context) {
+	key := c.Param("key")
+
+	var value interface{}
+	if err := c.ShouldBindJSON(&value); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	// Cache in Memcached
+	expirationMem := 10 * time.Minute
+	if err := ch.memcachedCache.Set(key, value, expirationMem); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to set key %s in Memcached: %s", key, err.Error())})
+		return
+	}
+
+	// Cache in Redis
+	expirationRedis := 5 * time.Minute
+	valueJSON, err := json.Marshal(value)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to marshal value to JSON: %s", err.Error())})
+		return
+	}
+	if err := ch.redisCache.Set(key, string(valueJSON), expirationRedis); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to set key %s in Redis: %s", key, err.Error())})
+		return
+	}
+
+	// Cache in InMemory
+	expirationInMem := 1 * time.Hour
+	ch.inMemoryCache.Set(key, value, expirationInMem)
+
+	// Cache in LRUCache
+	ch.lruCache.Set(key, value, 1*time.Hour)
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Successfully cached value with key %s", key)})
+}
+
+func (ch *CacheHandler) GetCache(c *gin.Context) {
+	key := c.Param("key")
+
+	// Try retrieving from LRUCache first
+	if value, found := ch.lruCache.Get(key); found {
+		c.JSON(http.StatusOK, gin.H{"value": value})
+		return
+	}
+
+	// If not found in LRUCache, try Memcached
+	memcachedValue, err := ch.memcachedCache.Get(key)
+	if err == nil {
+		c.JSON(http.StatusOK, gin.H{"value": memcachedValue})
+		return
+	}
+
+	// If not found in Memcached, try Redis
+	redisValue, err := ch.redisCache.Get(key)
+	if err == nil {
+		c.JSON(http.StatusOK, gin.H{"value": redisValue})
+		return
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Key %s not found in cache", key)})
+}
+
+func (ch *CacheHandler) DeleteCache(c *gin.Context) {
+	key := c.Param("key")
+
+	// Delete from Memcached
+	if err := ch.memcachedCache.Delete(key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete key %s from Memcached: %s", key, err.Error())})
+		return
+	}
+
+	// Delete from Redis
+	if err := ch.redisCache.Delete(key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete key %s from Redis: %s", key, err.Error())})
+		return
+	}
+
+	// Delete from InMemory
+	ch.inMemoryCache.Delete(key)
+
+	// Delete from LRUCache
+	ch.lruCache.Remove(key)
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Successfully deleted key %s from all caches", key)})
+}
+
+func (ch *CacheHandler) GetAllCache(c *gin.Context) {
+	// Fetch all from InMemory
+	inMemValues := ch.inMemoryCache.GetAllKeys()
+
+	// Fetch all from LRUCache
+	lruValues := ch.lruCache.GetAll()
+
+	c.JSON(http.StatusOK, gin.H{
+		"inMemoryCache": inMemValues,
+		"lruCache":      lruValues,
+	})
+}
+
+func (ch *CacheHandler) DeleteAllCache(c *gin.Context) {
+	// Delete all from Memcached
+	if err := ch.memcachedCache.DeleteAllKeys(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete all keys from Memcached: %s", err.Error())})
+		return
+	}
+
+	// Delete all from Redis
+	if err := ch.redisCache.DeleteAllKeys(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to delete all keys from Redis: %s", err.Error())})
+		return
+	}
+
+	// Clear InMemory cache
+	ch.inMemoryCache.DeleteAllKeys()
+
+	// Clear LRUCache
+	ch.lruCache.Clear()
+
+	c.JSON(http.StatusOK, gin.H{"message": "Successfully cleared all caches"})
 }
