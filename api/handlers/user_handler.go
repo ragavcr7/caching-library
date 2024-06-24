@@ -212,7 +212,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ragavcr7/caching-library/cacheinterface"
+	cacheinterface "github.com/ragavcr7/caching-library/cache_interface"
 )
 
 // UserHandler encapsulates user data operations.
