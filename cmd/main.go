@@ -842,11 +842,11 @@ func main() {
 	redisCache := cache.NewRedisCache(redisAddr, redisDB)
 
 	// Capacity for InMemoryCache
-	capacity := 100
+	capacity := 3
 	inMemoryCache := cache.NewInMemoryCache(capacity)
 
 	// Initialize LRU cache
-	lruCapacity := 1000 // Adjust capacity as needed
+	lruCapacity := 3 // Adjust capacity as needed
 	lruCache := cache.NewLRUCache(lruCapacity)
 
 	// Create the Gin router
@@ -866,10 +866,10 @@ func main() {
 	router.DELETE("/user/:id", userHandler.DeleteUser)
 
 	// Start the server
-	port := 8080
-	address := fmt.Sprintf(":%d", port)
-	log.Printf("Starting server on %s", address)
-	if err := router.Run(address); err != nil {
+	//port := 8080
+	//address := fmt.Sprintf(":%d", port)
+	//log.Printf("Starting server on %s", )
+	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }
@@ -979,7 +979,7 @@ func (ch *CacheHandler) SetCache(c *gin.Context) {
 	}
 
 	// Cache in Memcached
-	expirationMem := 10 * time.Minute
+	expirationMem := 5 * time.Minute
 	if err := ch.memcachedCache.Set(key, value, expirationMem); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to set key %s in Memcached: %s", key, err.Error())})
 		return
@@ -998,11 +998,11 @@ func (ch *CacheHandler) SetCache(c *gin.Context) {
 	}
 
 	// Cache in InMemory
-	expirationInMem := 1 * time.Hour
+	expirationInMem := 5 * time.Minute
 	ch.inMemoryCache.Set(key, value, expirationInMem)
 
 	// Cache in LRUCache
-	ch.lruCache.Set(key, value, 1*time.Hour)
+	ch.lruCache.Set(key, value, 5*time.Minute)
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Successfully cached value with key %s", key)})
 }

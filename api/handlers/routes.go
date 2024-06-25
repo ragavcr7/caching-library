@@ -5,10 +5,11 @@ package handlers
 
 import (
 	"github.com/gin-gonic/gin"
-	cache "github.com/ragavcr7/caching-library/api"
+	"github.com/ragavcr7/caching-library/cache_interface"
 )
 
-func SetupRouter(memcachedCache cache.Cache, redisCache cache.Cache, inMemoryCache cache.Cache) *gin.Engine {
+// SetupRouter sets up the routes for the API and links them to the appropriate handler functions.
+func SetupRouter(memcachedCache cache_interface.Cache, redisCache cache_interface.Cache, inMemoryCache cache_interface.Cache) *gin.Engine {
 	router := gin.Default()
 
 	// Initialize handlers

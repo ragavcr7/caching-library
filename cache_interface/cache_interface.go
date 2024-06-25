@@ -1,5 +1,5 @@
 // cacheinterface/cache_interface.go
-package cacheinterface
+package cache_interface
 
 import "time"
 
@@ -9,4 +9,10 @@ type Cache interface {
 	Delete(key string) error
 	GetAllKeys() ([]string, error)
 	DeleteAllKeys() error
+}
+type User struct {
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	CreatedAt time.Time `json:"createdAt"`
 }
