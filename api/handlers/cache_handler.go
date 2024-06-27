@@ -1,5 +1,6 @@
 package handlers
 
+//uses gin framework to handle http request for caching data across multipple caching system
 import (
 	"encoding/json"
 	"fmt"
@@ -31,11 +32,11 @@ func (ch *CacheHandler) SetupRoutes(router *gin.Engine) {
 	router.GET("/cache/:key", ch.GetCache)
 	router.DELETE("/cache/:key", ch.DeleteCache)
 	router.GET("/cache", ch.GetAllCache)
-	router.DELETE("/cache", ch.DeleteAllCache)
+	router.DELETE("/cache", ch.DeleteAllCache) // d added for testing
 }
 
 func (ch *CacheHandler) SetCache(c *gin.Context) {
-	key := c.Param("key")
+	key := c.Param("key") //retrieves key parameter from url
 
 	var value interface{}
 	if err := c.ShouldBindJSON(&value); err != nil {
@@ -44,7 +45,7 @@ func (ch *CacheHandler) SetCache(c *gin.Context) {
 	}
 
 	// Cache in Memcached
-	expirationMem := 10 * time.Minute
+	expirationMem := 5 * time.Minute
 	if err := ch.memcachedCache.Set(key, value, expirationMem); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to set key %s in Memcached: %s", key, err.Error())})
 		return
@@ -63,11 +64,11 @@ func (ch *CacheHandler) SetCache(c *gin.Context) {
 	}
 
 	// Cache in InMemory
-	expirationInMem := 1 * time.Hour
+	expirationInMem := 5 * time.Minute
 	ch.inMemoryCache.Set(key, value, expirationInMem)
 
 	// Cache in LRUCache
-	ch.lruCache.Set(key, value, 1*time.Hour)
+	ch.lruCache.Set(key, value, 5*time.Minute)
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Successfully cached value with key %s", key)})
 }

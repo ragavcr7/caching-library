@@ -901,7 +901,7 @@ func (uh *UserHandler) GetUser(c *gin.Context) {
 		return
 	}
 
-	// Example: retrieve user data from database or cache
+	// retrieve user data from database or cache
 	user := User{
 		ID:        id,
 		Username:  "ragav",
@@ -926,7 +926,7 @@ func (uh *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Example: update user data in database or cache
+	// updating user data in database or cache
 	// In this case, we just return the updated user data as a response
 	updatedUser.ID = id
 	c.JSON(http.StatusOK, gin.H{"updatedUser": updatedUser})
@@ -940,7 +940,7 @@ func (uh *UserHandler) DeleteUser(c *gin.Context) {
 		return
 	}
 
-	// Example: delete user data from database or cache
+	// Example: deleting user data from database or cache
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("user with ID %d deleted", id)})
 }
 
@@ -966,7 +966,7 @@ func (ch *CacheHandler) SetupRoutes(router *gin.Engine) {
 	router.GET("/cache/:key", ch.GetCache)
 	router.DELETE("/cache/:key", ch.DeleteCache)
 	router.GET("/cache", ch.GetAllCache)
-	router.DELETE("/cache", ch.DeleteAllCache)
+	router.DELETE("/cache", ch.DeleteAllCache) //changed /d
 }
 
 func (ch *CacheHandler) SetCache(c *gin.Context) {

@@ -175,6 +175,7 @@ type MemcachedConfig struct {
 	Addr string
 }
 */
+//it defines the cache_interface with commom methods like get,set,getallkeys,setallkeys,deleteallkeys...
 import (
 	"context"
 	"fmt"
@@ -193,7 +194,7 @@ type Cache interface {
 }
 
 type InMemoryCache struct {
-	cache map[string]*cacheItem
+	cache map[string]*cacheItem //sores cached items in memory using a map
 }
 
 type cacheItem struct {

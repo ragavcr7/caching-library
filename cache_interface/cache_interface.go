@@ -1,4 +1,6 @@
 // cacheinterface/cache_interface.go
+
+// this file is written independently so it can avoid import cycle issue
 package cache_interface
 
 import "time"

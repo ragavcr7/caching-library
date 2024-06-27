@@ -9,6 +9,11 @@ import (
 
 
 
+
+
+
+
+
 	"github.com/go-redis/redis/v8"
 
 )
@@ -268,6 +273,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/go-redis/redis/v8"
+	"sync"
 	"time"
 )
 
@@ -275,6 +281,7 @@ import (
 type RedisCache struct {
 	client *redis.Client
 	ctx    context.Context
+	mu     sync.RWMutex
 }
 
 // NewRedisCache creates a new instance of RedisCache.
@@ -284,10 +291,10 @@ func NewRedisCache(addr string, db int) *RedisCache {
 		DB:   db,
 	}
 
-	client := redis.NewClient(opt)
+	client := redis.NewClient(opt) //creates new redis client
 
 	ctx := context.Background()
-	_, err := client.Ping(ctx).Result()
+	_, err := client.Ping(ctx).Result() //checks whether it connected to redis server
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to Redis: %v", err))
 	}
@@ -300,6 +307,8 @@ func NewRedisCache(addr string, db int) *RedisCache {
 
 // Set adds a new key-value pair to the Redis cache.
 func (rc *RedisCache) Set(key string, value interface{}, expiration time.Duration) error {
+	rc.mu.Lock()         //
+	defer rc.mu.Unlock() //
 	jsonValue, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("failed to marshal value to JSON: %w", err)
@@ -314,6 +323,8 @@ func (rc *RedisCache) Set(key string, value interface{}, expiration time.Duratio
 
 // Get retrieves a value from the Redis cache based on the key.
 func (rc *RedisCache) Get(key string) (string, error) {
+	rc.mu.Lock()         //
+	defer rc.mu.Unlock() //
 	val, err := rc.client.Get(rc.ctx, key).Result()
 	if err == redis.Nil {
 		return "", fmt.Errorf("key %s not found in Redis", key)
@@ -325,6 +336,8 @@ func (rc *RedisCache) Get(key string) (string, error) {
 
 // Delete removes a key-value pair from the Redis cache.
 func (rc *RedisCache) Delete(key string) error {
+	rc.mu.Lock()         //
+	defer rc.mu.Unlock() //
 	err := rc.client.Del(rc.ctx, key).Err()
 	if err != nil {
 		return fmt.Errorf("failed to delete key %s from Redis: %w", key, err)
@@ -334,6 +347,8 @@ func (rc *RedisCache) Delete(key string) error {
 
 // Close closes the Redis client connection.
 func (rc *RedisCache) Close() error {
+	rc.mu.Lock()         //
+	defer rc.mu.Unlock() //
 	err := rc.client.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close Redis connection: %w", err)
@@ -343,6 +358,8 @@ func (rc *RedisCache) Close() error {
 
 // GetAllKeys retrieves all keys from the Redis cache.
 func (rc *RedisCache) GetAllKeys() ([]string, error) {
+	rc.mu.Lock()         //
+	defer rc.mu.Unlock() //
 	keys, err := rc.client.Keys(rc.ctx, "*").Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all keys from Redis: %w", err)
@@ -352,6 +369,8 @@ func (rc *RedisCache) GetAllKeys() ([]string, error) {
 
 // DeleteAllKeys deletes all keys from the Redis cache.
 func (rc *RedisCache) DeleteAllKeys() error {
+	rc.mu.Lock()         //
+	defer rc.mu.Unlock() //
 	keys, err := rc.client.Keys(rc.ctx, "*").Result()
 	if err != nil {
 		return fmt.Errorf("failed to get all keys from Redis: %w", err)
