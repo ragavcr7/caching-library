@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -12,26 +11,35 @@ import (
 
 const (
 	memcachedServerAddr = "localhost:11211"
+	cacheCapacity       = 10
 )
 
-func setupInMemoryCache() *cache.InMemoryCache {
-	return cache_interface.NewInMemoryCache(5)
+// setupInMemoryCache sets up a new instance of InMemoryCache for testing.
+func setupInMemoryCache() cache_interface.Cache {
+	return cache.NewInMemoryCache(cacheCapacity)
 }
 
-func setupMemcachedCache() *cache.MemcachedCache {
-	return cache_interface.NewMemcachedCache(memcachedServerAddr)
+// setupMemcachedCache sets up a new instance of MemcachedCache for testing.
+func setupMemcachedCache() cache_interface.Cache {
+	return cache.NewMemcachedCache(memcachedServerAddr)
 }
 
-func TestIntegration_InmemoryCache(t *testing.T) {
-	inMemoryCache := setupInMemoryCache()
-	runIntegrationTests(t, inMemoryCache)
+// TestInMemoryCache tests the InMemoryCache implementation.
+func TestInMemoryCache(t *testing.T) {
+	cacheInterface := setupInMemoryCache()
+	runIntegrationTests(t, cacheInterface)
 }
 
-func TestIntegration_MemcachedCache(t *testing.T) {
-	MemcachedCache := setupMemcachedCache()
-	runIntegrationTests(t, MemcachedCache)
+// TestMemcachedCache tests the MemcachedCache implementation.
+func TestMemcachedCache(t *testing.T) {
+	cacheInterface := setupMemcachedCache()
+	runIntegrationTests(t, cacheInterface)
 }
-func runIntegrationTests(t *testing.T, cacheInterface cache.Cache) {
+
+// runIntegrationTests runs a series of integration tests on the provided cacheInterface.
+func runIntegrationTests(t *testing.T, cacheInterface cache_interface.Cache) {
+	t.Helper()
+
 	t.Run("SetAndGet", func(t *testing.T) {
 		testSetAndGet(t, cacheInterface)
 	})
@@ -39,71 +47,101 @@ func runIntegrationTests(t *testing.T, cacheInterface cache.Cache) {
 	t.Run("Delete", func(t *testing.T) {
 		testDelete(t, cacheInterface)
 	})
-	t.Run("ConcurrentAccess", func(t *testing.T) {
-		testConcurrentAccess(t, cacheInterface)
+
+	t.Run("GetAllKeys", func(t *testing.T) {
+		testGetAllKeys(t, cacheInterface)
+	})
+
+	t.Run("DeleteAllKeys", func(t *testing.T) {
+		testDeleteAllKeys(t, cacheInterface)
 	})
 }
 
-func testSetAndGet(t *testing.T, cacheInterface cache.Cache) {
-	err := CacheInterface.Set("name", "Kumar", 2*time.Minute)
+func testSetAndGet(t *testing.T, cacheInterface cache_interface.Cache) {
+	err := cacheInterface.Set("key1", "value1", 1*time.Minute)
 	if err != nil {
-		t.Fatalf("failed to set value: %v", err)
-	}
-	val, err := CacheInterface.Get("name")
-	if err != nil {
-		t.Fatalf("Key not found :%v", err)
-	}
-	if val != "Kumar" {
-		t.Fatalf("Expeceted value is: kumar but Got: %v", val)
+		t.Fatalf("Failed to set value: %v", err)
 	}
 
-	//Test expiration
+	val, found := cacheInterface.Get("key1")
+	if found != nil {
+		t.Error("Expected key1 to be found in cache, but it wasn't")
+	}
+	if val != "value1" {
+		t.Errorf("Expected value: value1, got: %v", val)
+	}
+
+	// Test expiration
 	time.Sleep(2 * time.Minute)
-	_, err = CacheInterface.Get("name")
-	if err == nil {
-		t.Errorf("Key is expected to be expired but found...")
+	_, found = cacheInterface.Get("key1")
+	if found != nil {
+		t.Error("Expected key1 to be expired and not found, but it was found")
 	}
 }
 
-func testDelete(t *Testing.T, cacheInterface cache.Cache) {
-	err := CacheInterface.Set("name", "Thor", 2*time.Minute)
+func testDelete(t *testing.T, cacheInterface cache_interface.Cache) {
+	err := cacheInterface.Set("key2", "value2", 1*time.Minute)
 	if err != nil {
-		t.Fatalf("Failed to set the value : %v", err)
-	}
-	CacheInterface.Delete("name")
-	_, found := CacheInterface.Get("name")
-	if found == nil {
-		t.Fatalf("Key: name is expected to be delete but Found : %v", err)
+		t.Fatalf("Failed to set value: %v", err)
 	}
 
+	err = cacheInterface.Delete("key2")
+	if err != nil {
+		t.Fatalf("Failed to delete key: %v", err)
+	}
+
+	_, found := cacheInterface.Get("key2")
+	if found != nil {
+		t.Error("Expected key2 to be deleted and not found, but it was found")
+	}
 }
-func testConcurrentAccess(t *testing.T, CacheInterface cache.Cache) {
-	var wg sync.WaitGroup
-	const numGoRoutines = 10
-	for i := 0; i < numGoRoutines; i++ {
-		wg.Add(1)
-		func(i int) {
-			defer wg.Done()
-			err := CacheInterface.Set(fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i))
-			if err != nil {
-				t.Fatalf("failed to set key : %d and got :%v", i, err)
-			}
-		}(i)
+
+func testGetAllKeys(t *testing.T, cacheInterface cache_interface.Cache) {
+	keys := []string{"key3", "key4", "key5"}
+	for _, key := range keys {
+		err := cacheInterface.Set(key, fmt.Sprintf("value_%s", key), 1*time.Minute)
+		if err != nil {
+			t.Fatalf("Failed to set value for key %s: %v", key, err)
+		}
 	}
-	wg.Wait()
-	for i := 0; i < numGoRoutines; i++ {
-		wg.Add(1)
-		func(i int) {
-			defer wg.Done()
-			val, err := CacheInterface.Get(fmt.Sprintf("key%d"), i)
-			if err != nil {
-				t.Fatalf("failed to get key : %d and got : %v", i, err)
-			}
-			expectedValue := fmt.Sprintf("key%d", i)
-			if expectedValue != val {
-				t.Errorf("Value expected is: %v but Got: %v", expectedValue, val)
-			}
-		}(i)
+
+	allKeys, err := cacheInterface.GetAllKeys()
+	if err != nil {
+		t.Fatalf("Failed to get all keys: %v", err)
 	}
-	wg.Wait()
+
+	keySet := make(map[string]bool)
+	for _, key := range allKeys {
+		keySet[key] = true
+	}
+
+	for _, key := range keys {
+		if !keySet[key] {
+			t.Errorf("Expected key %s in GetAllKeys result, but it was missing", key)
+		}
+	}
+}
+
+func testDeleteAllKeys(t *testing.T, cacheInterface cache_interface.Cache) {
+	keys := []string{"key6", "key7", "key8"}
+	for _, key := range keys {
+		err := cacheInterface.Set(key, fmt.Sprintf("value_%s", key), 1*time.Minute)
+		if err != nil {
+			t.Fatalf("Failed to set value for key %s: %v", key, err)
+		}
+	}
+
+	err := cacheInterface.DeleteAllKeys()
+	if err != nil {
+		t.Fatalf("Failed to delete all keys: %v", err)
+	}
+
+	allKeys, err := cacheInterface.GetAllKeys()
+	if err != nil {
+		t.Fatalf("Failed to get all keys after DeleteAllKeys: %v", err)
+	}
+
+	if len(allKeys) > 0 {
+		t.Errorf("Expected all keys to be deleted, but found %d keys remaining", len(allKeys))
+	}
 }

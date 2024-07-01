@@ -810,8 +810,7 @@ func main() {
 	}
 }
 */
-
-// trying with manual inputs
+// trying with manual inputs----working
 import (
 	"encoding/json"
 	"fmt"
