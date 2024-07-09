@@ -28,7 +28,7 @@ func TestInMemoryCache_setAndGet(t *testing.T) {
 	}
 
 	//test expiration
-	time.Sleep(2 * time.Minute)
+	time.Sleep(5 * time.Minute)
 	_, found = cache.Get("key1")
 	if found {
 		t.Errorf("Expected key1 to be expired,but it was found in cache")

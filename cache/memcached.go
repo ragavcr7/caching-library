@@ -1,6 +1,7 @@
 // memcached.go
 package cache
 
+/* this package only implements memcache not lru with memcache for that refer lru_cache.go file
 import (
 	"encoding/json"
 	"fmt"
@@ -99,3 +100,4 @@ func (mc *MemcachedCache) DeleteAllKeys() error {
 }
 
 // MemcachedCache is a cache implementation using Memcached.
+*/

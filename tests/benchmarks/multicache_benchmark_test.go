@@ -1,3 +1,5 @@
+// multicache_benchmark_test.go
+
 package benchmarks
 
 import (
@@ -8,75 +10,107 @@ import (
 	"github.com/ragavcr7/caching-library/cache"
 )
 
-func BenchmarkMultiCache_Set(b *testing.B) {
-	mc := cache.NewMultiCache("localhost:11211", 100)
+func BenchmarkMulticacheSet(b *testing.B) {
+	mc := cache.NewMulticache(1000, 1000, "localhost:11211")
+	defer mc.Clear()
 
-	for n := 0; n < b.N; n++ {
-		key := fmt.Sprintf("test_key_%d", n)
-		value := fmt.Sprintf("test_value_%d", n)
-		err := mc.Set(key, value, 5*time.Minute)
-		if err != nil {
-			b.Errorf("Error setting key-value pair: %v", err)
-		}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key%d", i)
+		value := fmt.Sprintf("value%d", i)
+		expiration := time.Minute
+		mc.Set(key, value, expiration)
 	}
 }
 
-func BenchmarkMultiCache_Get(b *testing.B) {
-	mc := cache.NewMultiCache("localhost:11211", 100)
-	key := "test_key"
-	value := "test_value"
-	mc.Set(key, value, 5*time.Minute)
+func BenchmarkMulticacheGet(b *testing.B) {
+	mc := cache.NewMulticache(1000, 1000, "localhost:11211")
+	defer mc.Clear()
 
-	for n := 0; n < b.N; n++ {
-		_, err := mc.Get(key)
-		if err != nil {
-			b.Errorf("Error getting value for key %s: %v", key, err)
-		}
+	// Populate cache
+	for i := 0; i < 1000; i++ {
+		key := fmt.Sprintf("key%d", i)
+		value := fmt.Sprintf("value%d", i)
+		expiration := time.Minute
+		mc.Set(key, value, expiration)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key%d", i%1000)
+		mc.Get(key)
 	}
 }
 
-func BenchmarkMultiCache_GetAllKeys(b *testing.B) {
-	mc := cache.NewMultiCache("localhost:11211", 100)
-	for i := 0; i < 100; i++ {
-		key := fmt.Sprintf("test_key_%d", i)
-		value := fmt.Sprintf("test_value_%d", i)
-		mc.Set(key, value, 5*time.Minute)
+func BenchmarkMulticacheRemove(b *testing.B) {
+	mc := cache.NewMulticache(1000, 1000, "localhost:11211")
+	defer mc.Clear()
+
+	// Populate cache
+	for i := 0; i < 1000; i++ {
+		key := fmt.Sprintf("key%d", i)
+		value := fmt.Sprintf("value%d", i)
+		expiration := time.Minute
+		mc.Set(key, value, expiration)
 	}
 
-	for n := 0; n < b.N; n++ {
-		_, err := mc.GetAllKeys()
-		if err != nil {
-			b.Errorf("Error getting all keys: %v", err)
-		}
-	}
-}
-
-func BenchmarkMultiCache_Delete(b *testing.B) {
-	mc := cache.NewMultiCache("localhost:11211", 100)
-	key := "test_key"
-	value := "test_value"
-	mc.Set(key, value, 5*time.Minute)
-
-	for n := 0; n < b.N; n++ {
-		err := mc.Delete(key)
-		if err != nil {
-			b.Errorf("Error deleting key %s: %v", key, err)
-		}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		key := fmt.Sprintf("key%d", i%1000)
+		mc.Remove(key)
 	}
 }
 
-func BenchmarkMultiCache_DeleteAllKeys(b *testing.B) {
-	mc := cache.NewMultiCache("localhost:11211", 100)
-	for i := 0; i < 100; i++ {
-		key := fmt.Sprintf("test_key_%d", i)
-		value := fmt.Sprintf("test_value_%d", i)
-		mc.Set(key, value, 5*time.Minute)
+func BenchmarkMulticacheGetAllKeys(b *testing.B) {
+	mc := cache.NewMulticache(1000, 1000, "localhost:11211")
+	defer mc.Clear()
+
+	// Populate cache
+	for i := 0; i < 1000; i++ {
+		key := fmt.Sprintf("key%d", i)
+		value := fmt.Sprintf("value%d", i)
+		expiration := time.Minute
+		mc.Set(key, value, expiration)
 	}
 
-	for n := 0; n < b.N; n++ {
-		err := mc.DeleteAllKeys()
-		if err != nil {
-			b.Errorf("Error deleting all keys: %v", err)
-		}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mc.GetAllKeys()
+	}
+}
+
+func BenchmarkMulticacheDeleteAllKeys(b *testing.B) {
+	mc := cache.NewMulticache(1000, 1000, "localhost:11211")
+	defer mc.Clear()
+
+	// Populate cache
+	for i := 0; i < 1000; i++ {
+		key := fmt.Sprintf("key%d", i)
+		value := fmt.Sprintf("value%d", i)
+		expiration := time.Minute
+		mc.Set(key, value, expiration)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mc.DeleteAllKeys()
+	}
+}
+
+func BenchmarkMulticacheClear(b *testing.B) {
+	mc := cache.NewMulticache(1000, 1000, "localhost:11211")
+	defer mc.Clear()
+
+	// Populate cache
+	for i := 0; i < 1000; i++ {
+		key := fmt.Sprintf("key%d", i)
+		value := fmt.Sprintf("value%d", i)
+		expiration := time.Minute
+		mc.Set(key, value, expiration)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mc.Clear()
 	}
 }

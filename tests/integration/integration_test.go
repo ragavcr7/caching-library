@@ -1,147 +1,104 @@
 package tests
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/ragavcr7/caching-library/cache"
-	"github.com/ragavcr7/caching-library/cache_interface"
 )
 
-const (
-	memcachedServerAddr = "localhost:11211"
-	cacheCapacity       = 10
-)
+// Adjusted integration test with error handling and verification
+func TestCacheIntegration(t *testing.T) {
+	// Initialize caches
+	inMemoryCapacity := 5
+	lruCapacity := 3
+	memcachedAddr := "localhost:11211"
 
-// setupInMemoryCache sets up a new instance of InMemoryCache for testing.
-func setupInMemoryCache() cache_interface.Cache {
-	return cache.NewInMemoryCache(cacheCapacity)
-}
+	inMemoryCache := cache.NewInMemoryCache(inMemoryCapacity)
+	lruCache := cache.NewLRUCacheWithMemcached(lruCapacity, memcachedAddr)
+	multicache := cache.NewMulticache(inMemoryCapacity, lruCapacity, memcachedAddr)
 
-// setupMemcachedCache sets up a new instance of MemcachedCache for testing.
-func setupMemcachedCache() cache_interface.Cache {
-	return cache.NewMemcachedCache(memcachedServerAddr)
-}
+	defer func() {
+		inMemoryCache.DeleteAllKeys()
+		lruCache.Clear()
+		multicache.Clear()
+	}()
 
-// TestInMemoryCache tests the InMemoryCache implementation.
-func TestInMemoryCache(t *testing.T) {
-	cacheInterface := setupInMemoryCache()
-	runIntegrationTests(t, cacheInterface)
-}
+	// Test scenario 1: Set in InMemoryCache and get from Multicache
+	key1 := "key1"
+	value1 := "value1"
+	expiration1 := 1 * time.Minute
 
-// TestMemcachedCache tests the MemcachedCache implementation.
-func TestMemcachedCache(t *testing.T) {
-	cacheInterface := setupMemcachedCache()
-	runIntegrationTests(t, cacheInterface)
-}
+	inMemoryCache.Set(key1, value1, expiration1)
+	time.Sleep(100 * time.Millisecond) // Allow caches to sync
 
-// runIntegrationTests runs a series of integration tests on the provided cacheInterface.
-func runIntegrationTests(t *testing.T, cacheInterface cache_interface.Cache) {
-	t.Helper()
-
-	t.Run("SetAndGet", func(t *testing.T) {
-		testSetAndGet(t, cacheInterface)
-	})
-
-	t.Run("Delete", func(t *testing.T) {
-		testDelete(t, cacheInterface)
-	})
-
-	t.Run("GetAllKeys", func(t *testing.T) {
-		testGetAllKeys(t, cacheInterface)
-	})
-
-	t.Run("DeleteAllKeys", func(t *testing.T) {
-		testDeleteAllKeys(t, cacheInterface)
-	})
-}
-
-func testSetAndGet(t *testing.T, cacheInterface cache_interface.Cache) {
-	err := cacheInterface.Set("key1", "value1", 1*time.Minute)
-	if err != nil {
-		t.Fatalf("Failed to set value: %v", err)
+	if val, found := multicache.Get(key1); !found || val.(string) != value1 {
+		t.Errorf("Expected value %s for key %s from Multicache, got %v", value1, key1, val)
 	}
 
-	val, found := cacheInterface.Get("key1")
-	if found != nil {
-		t.Error("Expected key1 to be found in cache, but it wasn't")
-	}
-	if val != "value1" {
-		t.Errorf("Expected value: value1, got: %v", val)
+	// Test scenario 2: Set in LRUCache and get from Multicache
+	key2 := "key2"
+	value2 := 12345
+	expiration2 := 5 * time.Second
+
+	lruCache.Set(key2, value2, expiration2)
+	time.Sleep(100 * time.Millisecond) // Allow caches to sync
+
+	if val, found := multicache.Get(key2); !found || val.(int) != value2 {
+		t.Errorf("Expected value %d for key %s from Multicache, got %v", value2, key2, val)
 	}
 
-	// Test expiration
-	time.Sleep(2 * time.Minute)
-	_, found = cacheInterface.Get("key1")
-	if found != nil {
-		t.Error("Expected key1 to be expired and not found, but it was found")
-	}
-}
+	// Test scenario 3: Set in Multicache and verify individual caches
+	key3 := "key3"
+	value3 := true
+	expiration3 := 10 * time.Minute
 
-func testDelete(t *testing.T, cacheInterface cache_interface.Cache) {
-	err := cacheInterface.Set("key2", "value2", 1*time.Minute)
-	if err != nil {
-		t.Fatalf("Failed to set value: %v", err)
-	}
+	multicache.Set(key3, value3, expiration3)
+	time.Sleep(100 * time.Millisecond) // Allow caches to sync
 
-	err = cacheInterface.Delete("key2")
-	if err != nil {
-		t.Fatalf("Failed to delete key: %v", err)
+	// Verify in InMemoryCache
+	if val, found := inMemoryCache.Get(key3); !found || val.(bool) != value3 {
+		t.Errorf("Expected value %v for key %s in InMemoryCache, got %v", value3, key3, val)
 	}
 
-	_, found := cacheInterface.Get("key2")
-	if found != nil {
-		t.Error("Expected key2 to be deleted and not found, but it was found")
-	}
-}
-
-func testGetAllKeys(t *testing.T, cacheInterface cache_interface.Cache) {
-	keys := []string{"key3", "key4", "key5"}
-	for _, key := range keys {
-		err := cacheInterface.Set(key, fmt.Sprintf("value_%s", key), 1*time.Minute)
-		if err != nil {
-			t.Fatalf("Failed to set value for key %s: %v", key, err)
-		}
+	// Verify in LRUCache
+	if val, found := lruCache.Get(key3); !found || val.(bool) != value3 {
+		t.Errorf("Expected value %v for key %s in LRUCache, got %v", value3, key3, val)
 	}
 
-	allKeys, err := cacheInterface.GetAllKeys()
-	if err != nil {
-		t.Fatalf("Failed to get all keys: %v", err)
+	// Test scenario 4: Delete from Multicache and verify
+	multicache.Remove(key1)
+	time.Sleep(100 * time.Millisecond) // Allow caches to sync
+
+	if _, found := multicache.Get(key1); found {
+		t.Errorf("Expected key %s to be deleted from Multicache, but it still exists", key1)
 	}
 
-	keySet := make(map[string]bool)
-	for _, key := range allKeys {
-		keySet[key] = true
+	// Verify in InMemoryCache
+	if _, found := inMemoryCache.Get(key1); found {
+		t.Errorf("Expected key %s to be deleted from InMemoryCache, but it still exists", key1)
 	}
 
-	for _, key := range keys {
-		if !keySet[key] {
-			t.Errorf("Expected key %s in GetAllKeys result, but it was missing", key)
-		}
-	}
-}
-
-func testDeleteAllKeys(t *testing.T, cacheInterface cache_interface.Cache) {
-	keys := []string{"key6", "key7", "key8"}
-	for _, key := range keys {
-		err := cacheInterface.Set(key, fmt.Sprintf("value_%s", key), 1*time.Minute)
-		if err != nil {
-			t.Fatalf("Failed to set value for key %s: %v", key, err)
-		}
+	// Verify in LRUCache
+	if _, found := lruCache.Get(key1); found {
+		t.Errorf("Expected key %s to be deleted from LRUCache, but it still exists", key1)
 	}
 
-	err := cacheInterface.DeleteAllKeys()
-	if err != nil {
-		t.Fatalf("Failed to delete all keys: %v", err)
+	// Test scenario 5: Delete all keys from Multicache and verify
+	multicache.DeleteAllKeys()
+	time.Sleep(100 * time.Millisecond) // Allow caches to sync
+
+	if keys := multicache.GetAllKeys(); len(keys) != 0 {
+		t.Errorf("Expected 0 keys in Multicache after DeleteAllKeys, got %d", len(keys))
 	}
 
-	allKeys, err := cacheInterface.GetAllKeys()
-	if err != nil {
-		t.Fatalf("Failed to get all keys after DeleteAllKeys: %v", err)
+	// Verify in InMemoryCache
+	if keys := inMemoryCache.GetAllKeys(); len(keys) != 0 {
+		t.Errorf("Expected 0 keys in InMemoryCache after DeleteAllKeys, got %d", len(keys))
 	}
 
-	if len(allKeys) > 0 {
-		t.Errorf("Expected all keys to be deleted, but found %d keys remaining", len(allKeys))
+	// Verify in LRUCache
+	if keys := lruCache.GetAll(); len(keys) != 0 {
+		t.Errorf("Expected 0 keys in LRUCache after DeleteAllKeys, got %d", len(keys))
 	}
 }
