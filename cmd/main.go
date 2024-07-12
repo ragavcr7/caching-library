@@ -27,12 +27,12 @@ func main() {
 	// Initialize LRU cache
 	lruCapacity := 3 // Adjust capacity as needed
 	lruCache := cache.NewLRUCacheWithMemcached(lruCapacity, memcachedAddr)
-
+	multiCache := cache.NewMulticache(capacity, lruCapacity, memcachedAddr) //
 	// Create the Gin router
 	router := gin.Default()
 
 	// Initialize API handlers
-	cacheHandler := NewCacheHandler(inMemoryCache, lruCache)
+	cacheHandler := NewCacheHandler(inMemoryCache, lruCache, multiCache)
 
 	// Routes for caching endpoints
 	cacheHandler.SetupRoutes(router)
@@ -45,13 +45,16 @@ func main() {
 type CacheHandler struct {
 	inMemoryCache *cache.InMemoryCache
 	lruCache      *cache.LRUCache
+	multiCache    *cache.Multicache
 }
 
-func NewCacheHandler(inMemoryCache *cache.InMemoryCache, lruCache *cache.LRUCache) *CacheHandler {
+func NewCacheHandler(inMemoryCache *cache.InMemoryCache, lruCache *cache.LRUCache, multiCache *cache.Multicache) *CacheHandler {
 	return &CacheHandler{
 		inMemoryCache: inMemoryCache,
 		lruCache:      lruCache,
+		multiCache:    multiCache,
 	}
+
 }
 
 func (ch *CacheHandler) SetupRoutes(router *gin.Engine) {
@@ -77,7 +80,7 @@ func (ch *CacheHandler) SetCache(c *gin.Context) {
 
 	// Cache in LRUCache
 	ch.lruCache.Set(key, value, 5*time.Minute)
-
+	ch.multiCache.Set(key, value, 5*time.Minute)
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Successfully cached value with key %s", key)})
 }
 
@@ -96,6 +99,11 @@ func (ch *CacheHandler) GetCache(c *gin.Context) {
 		return
 	}
 
+	if value, found := ch.multiCache.Get(key); found {
+		c.JSON(http.StatusOK, gin.H{"value": value})
+		return
+	}
+
 	c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("key %s not found in caches", key)})
 }
 
@@ -108,6 +116,8 @@ func (ch *CacheHandler) DeleteCache(c *gin.Context) {
 	// Delete from LRUCache
 	ch.lruCache.Remove(key)
 
+	ch.multiCache.Remove(key)
+
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Successfully deleted key %s from all caches", key)})
 }
 
@@ -118,9 +128,11 @@ func (ch *CacheHandler) GetAllCache(c *gin.Context) {
 	// Fetch all from LRUCache
 	lruValues := ch.lruCache.GetAll()
 
+	multiValues := ch.multiCache.GetAllKeys()
 	c.JSON(http.StatusOK, gin.H{
 		"inMemoryCache": inMemValues,
 		"lruCache":      lruValues,
+		"multiCache":    multiValues,
 	})
 }
 
@@ -131,5 +143,6 @@ func (ch *CacheHandler) DeleteAllCache(c *gin.Context) {
 	// Clear LRUCache
 	ch.lruCache.Clear()
 
+	ch.multiCache.DeleteAllKeys()
 	c.JSON(http.StatusOK, gin.H{"message": "Successfully cleared all caches"})
 }
